@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import RootNavigator from './src/navigation/RootNavigatior';
-
+import BokingScreen from './src/screens/BookingScreen';
 export default function App() {
   return (
     <NavigationContainer>

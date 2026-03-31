@@ -8,7 +8,6 @@ import {
   Alert
 } from 'react-native';
 
-
 import { db } from './firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore';
 

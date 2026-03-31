@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import {
   View,
   Text,
@@ -14,7 +17,8 @@ export default function RegisterScreen({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState('client'); // client | barber
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+  try {
     if (!email || !password || !confirmPassword) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
@@ -25,18 +29,58 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    // 🔥 Aquí luego conectamos Firebase
-    console.log({
+    // 🔐 Crear usuario en Firebase Auth
+    const userCredential = await auth().createUserWithEmailAndPassword(
       email,
-      password,
-      role,
+      password
+    );
+
+    const uid = userCredential.user.uid;
+
+    // 💾 Guardar en Firestore
+    await firestore().collection('users').doc(uid).set({
+      email,
+      role, // client | barber
+      createdAt: firestore.FieldValue.serverTimestamp(),
     });
 
-    Alert.alert('Registro exitoso', `Registrado como ${role}`);
+    Alert.alert('Éxito', 'Cuenta creada correctamente');
 
-    // navegación futura
+    // 👉 navegación futura
     // navigation.navigate('Login');
-  };
+
+  } catch (error) {
+    console.log(error);
+
+    if (error.code === 'auth/email-already-in-use') {
+      Alert.alert('Error', 'Ese correo ya está registrado');
+    } else if (error.code === 'auth/invalid-email') {
+      Alert.alert('Error', 'Correo inválido');
+    } else if (error.code === 'auth/weak-password') {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+    } else {
+      Alert.alert('Error', 'Ocurrió un error al registrarse');
+    }
+  }
+};
+const handleLogin = async () => {
+  try {
+    if (!username || !password) {
+      Alert.alert('Error', 'Completa todos los campos');
+      return;
+    }
+
+    const userCredential = await auth().signInWithEmailAndPassword(
+      username,
+      password
+    );
+
+    setIsLoggedIn(true);
+
+  } catch (error) {
+    Alert.alert('Error', 'Credenciales incorrectas');
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -116,7 +160,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#f2f2f2',
+    backgroundColor: '#3a3a3a',
     padding: 15,
     borderRadius: 12,
     marginBottom: 15,
@@ -141,10 +185,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   roleSelected: {
-    backgroundColor: '#111',
+    backgroundColor: '#9c9c9c',
   },
   roleText: {
-    color: '#000',
+    color: '#161616',
     fontWeight: '600',
   },
   button: {
