@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 import {
   View,
   Text,
@@ -11,87 +10,187 @@ import {
   Alert,
 } from 'react-native';
 
-export default function RegisterScreen({ navigation }) {
+// 🔥 Google
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+GoogleSignin.configure({
+  webClientId: '1:574933300093:android:1ca02a9de557754aaa9214',
+});
+
+export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('client'); // client | barber
+  const [role, setRole] = useState('client');
 
-  const handleRegister = async () => {
-  try {
-    if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Completa todos los campos');
-      return;
-    }
+  // 📞 teléfono
+  const [phone, setPhone] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const [code, setCode] = useState('');
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
-      return;
-    }
-
-    // 🔐 Crear usuario en Firebase Auth
-    const userCredential = await auth().createUserWithEmailAndPassword(
-      email,
-      password
-    );
-
-    const uid = userCredential.user.uid;
-
-    // 💾 Guardar en Firestore
-    await firestore().collection('users').doc(uid).set({
-      email,
-      role, // client | barber
-      createdAt: firestore.FieldValue.serverTimestamp(),
+  // 🔄 detectar sesión activa
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged(user => {
+      if (user && (user.emailVerified || user.phoneNumber)) {
+        navigation.replace('TurnoScreen');
+      }
     });
 
-    Alert.alert('Éxito', 'Cuenta creada correctamente');
+    return unsubscribe;
+  }, []);
 
-    // 👉 navegación futura
-    // navigation.navigate('Login');
+  // 🔧 configurar Google
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: 'TU_WEB_CLIENT_ID_AQUI', // ⚠️ luego te ayudo con esto
+    });
+  }, []);
 
-  } catch (error) {
-    console.log(error);
+  // =============================
+  // 📧 REGISTRO EMAIL
+  // =============================
+  const handleRegister = async () => {
+    try {
+      if (!email || !password || !confirmPassword) {
+        Alert.alert('Error', 'Completa todos los campos');
+        return;
+      }
 
-    if (error.code === 'auth/email-already-in-use') {
-      Alert.alert('Error', 'Ese correo ya está registrado');
-    } else if (error.code === 'auth/invalid-email') {
-      Alert.alert('Error', 'Correo inválido');
-    } else if (error.code === 'auth/weak-password') {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
-    } else {
-      Alert.alert('Error', 'Ocurrió un error al registrarse');
+      if (password !== confirmPassword) {
+        Alert.alert('Error', 'Las contraseñas no coinciden');
+        return;
+      }
+
+      const userCredential = await auth().createUserWithEmailAndPassword(
+        email,
+        password
+      );
+
+      const user = userCredential.user;
+
+      // 📩 enviar verificación
+      await user.sendEmailVerification();
+
+      // 💾 guardar en Firestore
+      await firestore().collection('users').doc(user.uid).set({
+        email,
+        role,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      Alert.alert(
+        'Verificación',
+        'Revisa tu correo y confirma tu cuenta antes de iniciar sesión'
+      );
+    } catch (error) {
+      if (error.code === 'auth/email-already-in-use') {
+        Alert.alert('Error', 'Ese correo ya está registrado');
+      } else if (error.code === 'auth/invalid-email') {
+        Alert.alert('Error', 'Correo inválido');
+      } else if (error.code === 'auth/weak-password') {
+        Alert.alert('Error', 'Mínimo 6 caracteres');
+      } else {
+        Alert.alert('Error', 'Error al registrarse');
+      }
     }
-  }
-};
-const handleLogin = async () => {
-  try {
-    if (!username || !password) {
-      Alert.alert('Error', 'Completa todos los campos');
-      return;
+  };
+
+  // =============================
+  // 🔐 LOGIN EMAIL
+  // =============================
+  const handleLogin = async () => {
+    try {
+      if (!email || !password) {
+        Alert.alert('Error', 'Completa todos los campos');
+        return;
+      }
+
+      const userCredential = await auth().signInWithEmailAndPassword(
+        email,
+        password
+      );
+
+      const user = userCredential.user;
+
+      if (!user.emailVerified) {
+        Alert.alert('Error', 'Debes verificar tu correo');
+        return;
+      }
+
+      navigation.replace('TurnoScreen');
+    } catch (error) {
+      Alert.alert('Error', 'Credenciales incorrectas');
     }
+  };
 
-    const userCredential = await auth().signInWithEmailAndPassword(
-      username,
-      password
-    );
+  // =============================
+  // 🔴 GOOGLE LOGIN
+  // =============================
+  const handleGoogleLogin = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
 
-    setIsLoggedIn(true);
+      const { idToken } = await GoogleSignin.signIn();
 
-  } catch (error) {
-    Alert.alert('Error', 'Credenciales incorrectas');
-  }
-};
+      const googleCredential =
+        auth.GoogleAuthProvider.credential(idToken);
 
+      const userCredential = await auth().signInWithCredential(
+        googleCredential
+      );
+
+      const user = userCredential.user;
+
+      // 💾 guardar si no existe
+      await firestore().collection('users').doc(user.uid).set(
+        {
+          email: user.email,
+          role: 'client',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      navigation.replace('TurnoScreen');
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Google falló');
+    }
+  };
+
+  // =============================
+  // 📞 TELÉFONO
+  // =============================
+  const signInWithPhone = async () => {
+    try {
+      const confirmation = await auth().signInWithPhoneNumber(phone);
+      setConfirm(confirmation);
+      Alert.alert('Código enviado');
+    } catch (error) {
+      Alert.alert('Error', 'Número inválido');
+    }
+  };
+
+  const confirmCode = async () => {
+    try {
+      await confirm.confirm(code);
+      navigation.replace('TurnoScreen');
+    } catch (error) {
+      Alert.alert('Código incorrecto');
+    }
+  };
+
+  // =============================
+  // UI
+  // =============================
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Crear Cuenta</Text>
+      <Text style={styles.title}>Crear Cuenta / Login</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Correo electrónico"
         value={email}
         onChangeText={setEmail}
-        autoCapitalize="none"
       />
 
       <TextInput
@@ -110,8 +209,8 @@ const handleLogin = async () => {
         secureTextEntry
       />
 
-      {/* 🔥 Selección de rol */}
-      <Text style={styles.label}>Selecciona tu tipo de cuenta:</Text>
+      {/* Roles */}
+      <Text style={styles.label}>Tipo de cuenta:</Text>
 
       <View style={styles.roleContainer}>
         <TouchableOpacity
@@ -121,7 +220,7 @@ const handleLogin = async () => {
           ]}
           onPress={() => setRole('client')}
         >
-          <Text style={styles.roleText}>Cliente</Text>
+          <Text>Cliente</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -131,80 +230,101 @@ const handleLogin = async () => {
           ]}
           onPress={() => setRole('barber')}
         >
-          <Text style={styles.roleText}>Barbero</Text>
+          <Text>Barbero</Text>
         </TouchableOpacity>
       </View>
 
+      {/* BOTONES */}
       <TouchableOpacity style={styles.button} onPress={handleRegister}>
         <Text style={styles.buttonText}>Registrarse</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.link}>¿Ya tienes cuenta? Inicia sesión</Text>
+      <TouchableOpacity style={styles.button} onPress={handleLogin}>
+        <Text style={styles.buttonText}>Iniciar sesión</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin}>
+        <Text style={styles.buttonText}>Continuar con Google</Text>
+      </TouchableOpacity>
+
+      {/* TELÉFONO */}
+      <TextInput
+        style={styles.input}
+        placeholder="+549XXXXXXXX"
+        value={phone}
+        onChangeText={setPhone}
+      />
+
+      <TouchableOpacity style={styles.button} onPress={signInWithPhone}>
+        <Text style={styles.buttonText}>Enviar código</Text>
+      </TouchableOpacity>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Código SMS"
+        value={code}
+        onChangeText={setCode}
+      />
+
+      <TouchableOpacity style={styles.button} onPress={confirmCode}>
+        <Text style={styles.buttonText}>Confirmar código</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
+// =============================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     padding: 25,
-    backgroundColor: '#fff',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
+    fontSize: 24,
     textAlign: 'center',
+    marginBottom: 20,
+    fontWeight: 'bold',
   },
   input: {
     backgroundColor: '#3a3a3a',
     padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  label: {
-    marginTop: 10,
-    marginBottom: 10,
-    fontWeight: '600',
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  roleButton: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: '#eee',
     borderRadius: 10,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  roleSelected: {
-    backgroundColor: '#9c9c9c',
-  },
-  roleText: {
-    color: '#161616',
-    fontWeight: '600',
+    marginBottom: 10,
+    color: '#fff',
   },
   button: {
     backgroundColor: '#111',
     padding: 15,
-    borderRadius: 12,
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  googleBtn: {
+    backgroundColor: '#4285F4',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
     alignItems: 'center',
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
   },
-  link: {
-    marginTop: 20,
-    textAlign: 'center',
-    color: '#555',
+  label: {
+    marginTop: 10,
+  },
+  roleContainer: {
+    flexDirection: 'row',
+  },
+  roleButton: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: '#eee',
+    margin: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  roleSelected: {
+    backgroundColor: '#999',
   },
 });

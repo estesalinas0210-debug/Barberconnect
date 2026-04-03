@@ -1,23 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import LoginScreen from '../screens/LoginScreen';
-import TabNavigations from '../navigation/TabNavigations';
+import MainLoginScreen from '../screens/MainLoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import TurnoScreen from '../screens/TurnoScreen';
 
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!isLoggedIn ? (
-        <Stack.Screen name="Login">
-          {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-        </Stack.Screen>
-      ) : (
-        <Stack.Screen name="TabNavigations" component={TabNavigations} />
-      )}
+    <Stack.Navigator
+      initialRouteName="MainLoginScreen"
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="MainLoginScreen" component={MainLoginScreen} />
+      <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+      <Stack.Screen name="TurnoScreen" component={TurnoScreen} />
     </Stack.Navigator>
   );
 }

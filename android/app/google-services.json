@@ -12,7 +12,20 @@
           "package_name": "com.barberconnect"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "574933300093-03bvo8vg41ag2cts7mhkh8saddj2gvj9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.barberconnect",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "574933300093-k2ogsufugmrjdtt0vmp939g0frees2d9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAKbPyEt1D6waxi7zTJzGEwXl8F4nJ0S5U"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "574933300093-k2ogsufugmrjdtt0vmp939g0frees2d9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
