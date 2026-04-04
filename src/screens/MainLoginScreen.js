@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import {
   View,
   Text,
@@ -7,123 +8,175 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
 
 export default function MainLoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [phone, setPhone] = useState('');
-  const [confirm, setConfirm] = useState(null);
-  const [code, setCode] = useState('');
+  // 🔥 AUTO LOGIN + DETECCIÓN DE ROL
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const doc = await firestore()
+            .collection('users')
+            .doc(user.uid)
+            .get();
 
-  // 🔐 LOGIN EMAIL
-  const handleEmailLogin = async () => {
-    try {
-      if (!email || !password) {
-        Alert.alert('Error', 'Completa todos los campos');
-        return;
+          const role = doc.exists ? doc.data().role : 'client';
+
+          if (role === 'barber') {
+            navigation.replace('BarberHome');
+          } else {
+            navigation.replace('ClientHome');
+          }
+        } catch (error) {
+          navigation.replace('ClientHome');
+        }
       }
+    });
 
+    return unsubscribe;
+  }, []);
+
+  const handleLogin = async () => {
+    // 🔎 Validación PRO
+    if (!email.trim() || !password) {
+      Alert.alert('Atención', 'Por favor, ingresa tu correo y contraseña.');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      Alert.alert('Error', 'El correo no es válido.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
       const userCredential = await auth().signInWithEmailAndPassword(
-        email,
+        email.trim(),
         password
       );
 
-      if (!userCredential.user.emailVerified) {
-        Alert.alert('Error', 'Verifica tu correo');
+      const user = userCredential.user;
+
+      // 🔐 Verificar email
+      if (!user.emailVerified) {
+        Alert.alert(
+          'Verificación requerida',
+          'Debes verificar tu correo antes de ingresar.'
+        );
         return;
       }
 
-      navigation.replace('TurnoScreen');
-    } catch (error) {
-      Alert.alert('Error', 'Credenciales incorrectas');
-    }
-  };
+      // 🔥 Obtener rol desde Firestore
+      const doc = await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-  // 📞 ENVIAR SMS
-  const sendCode = async () => {
-    try {
-      const confirmation = await auth().signInWithPhoneNumber(phone);
-      setConfirm(confirmation);
-      Alert.alert('Código enviado');
-    } catch (error) {
-      Alert.alert('Error', 'Número inválido');
-    }
-  };
+      const role = doc.exists ? doc.data().role : 'client';
 
-  // 📲 CONFIRMAR SMS
-  const confirmCode = async () => {
-    try {
-      await confirm.confirm(code);
-      navigation.replace('TurnoScreen');
+      // 🚀 Redirección inteligente
+      if (role === 'barber') {
+        navigation.replace('BarberHome');
+      } else {
+        navigation.replace('ClientHome');
+      }
+
     } catch (error) {
-      Alert.alert('Código incorrecto');
+      console.log("Firebase Login Error:", error.code);
+
+      let errorMessage = 'Ocurrió un error al intentar ingresar.';
+
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'El formato del correo electrónico no es válido.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No existe una cuenta con este correo.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'La contraseña es incorrecta.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Demasiados intentos fallidos. Inténtalo más tarde.';
+          break;
+      }
+
+      Alert.alert('Error de acceso', errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.logo}>💈 BarberConnect</Text>
-      <Text style={styles.subtitle}>Inicia sesión</Text>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={styles.container}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Text style={styles.logo}>💈 BarberConnect</Text>
+          <Text style={styles.subtitle}>Inicia sesión para agendar tu turno</Text>
+        </View>
 
-      {/* EMAIL */}
-      <TextInput
-        style={styles.input}
-        placeholder="Correo electrónico"
-        placeholderTextColor="#aaa"
-        value={email}
-        onChangeText={setEmail}
-      />
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Correo Electrónico</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="ejemplo@correo.com"
+            placeholderTextColor="#666"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={email}
+            onChangeText={setEmail}
+          />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        placeholderTextColor="#aaa"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+          <Text style={styles.label}>Contraseña</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="••••••••"
+            placeholderTextColor="#666"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
-      <TouchableOpacity style={styles.button} onPress={handleEmailLogin}>
-        <Text style={styles.buttonText}>Ingresar con Email</Text>
-      </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.buttonText}>Ingresar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
-      {/* DIVISOR */}
-      <Text style={styles.divider}>— o —</Text>
-
-      {/* TELÉFONO */}
-      <TextInput
-        style={styles.input}
-        placeholder="+549XXXXXXXX"
-        placeholderTextColor="#aaa"
-        value={phone}
-        onChangeText={setPhone}
-      />
-
-      <TouchableOpacity style={styles.button} onPress={sendCode}>
-        <Text style={styles.buttonText}>Enviar código</Text>
-      </TouchableOpacity>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Código SMS"
-        placeholderTextColor="#aaa"
-        value={code}
-        onChangeText={setCode}
-      />
-
-      <TouchableOpacity style={styles.button} onPress={confirmCode}>
-        <Text style={styles.buttonText}>Confirmar código</Text>
-      </TouchableOpacity>
-
-      {/* REGISTRO */}
-      <TouchableOpacity onPress={() => navigation.navigate('RegisterScreen')}>
-        <Text style={styles.link}>
-          ¿No tienes una cuenta? Regístrate
-        </Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity 
+          style={styles.footerLink}
+          onPress={() => navigation.navigate('RegisterScreen')}
+        >
+          <Text style={styles.linkText}>
+            ¿No tienes una cuenta? <Text style={styles.linkHighlight}>Regístrate</Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -131,47 +184,78 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f0f0f',
+  },
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 25,
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
   logo: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
+    letterSpacing: 1,
   },
   subtitle: {
-    color: '#aaa',
-    textAlign: 'center',
-    marginBottom: 30,
+    color: '#888',
+    marginTop: 5,
+    fontSize: 16,
+  },
+  inputContainer: {
+    width: '100%',
+  },
+  label: {
+    color: '#c59d5f',
+    fontSize: 14,
+    marginBottom: 8,
+    marginLeft: 4,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: '#1c1c1c',
     color: '#fff',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
+    padding: 18,
+    borderRadius: 15,
+    marginBottom: 20,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
   },
   button: {
-    backgroundColor: '#c59d5f', // dorado barbería 🔥
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: '#c59d5f',
+    padding: 18,
+    borderRadius: 15,
     alignItems: 'center',
-    marginBottom: 10,
+    marginTop: 10,
+    shadowColor: '#c59d5f',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: {
     color: '#000',
     fontWeight: 'bold',
+    fontSize: 18,
   },
-  divider: {
-    color: '#aaa',
-    textAlign: 'center',
-    marginVertical: 15,
+  footerLink: {
+    marginTop: 35,
+    alignItems: 'center',
   },
-  link: {
+  linkText: {
+    color: '#888',
+    fontSize: 15,
+  },
+  linkHighlight: {
     color: '#c59d5f',
-    textAlign: 'center',
-    marginTop: 20,
+    fontWeight: 'bold',
   },
 });

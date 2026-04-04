@@ -1,200 +1,268 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  Animated,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-const productos = [
-   
-    { id: 1, 
-      name: 'Pomada moldeadore', 
-      price: '$20',
-      Image: require('../imagenes/pomada.jpg'),
-      description: 'Un corte de cabello clásico y moderno para hombres, realizado por barberos expertos utilizando técnicas de corte precisas y herramientas de alta calidad. El servicio incluye un lavado de cabello, corte personalizado según las preferencias del cliente, y un peinado final para lograr un look impecable y a la moda.'
-    },
-      
-
-    { id: 2, 
-      name: 'Cera para cabello', 
-      price: '$15',
-      Image: require('../imagenes/cera.jpg'),
-      description: 'Un corte de cabello clásico y moderno para hombres, realizado por barberos expertos utilizando técnicas de corte precisas y herramientas de alta calidad. El servicio incluye un lavado de cabello, corte personalizado según las preferencias del cliente, y un peinado final para lograr un look impecable y a la moda.'
-    },
-      
-
-    { id: 3, 
-      name: 'Texturizador', 
-      price: '$25',
-      Image: require('../imagenes/texturizador.jpg'),
-      description: 'Un corte de cabello clásico y moderno para hombres, realizado por barberos expertos utilizando técnicas de corte precisas y herramientas de alta calidad. El servicio incluye un lavado de cabello, corte personalizado según las preferencias del cliente, y un peinado final para lograr un look impecable y a la moda.'
-    },
-      
-
-    { id: 4, 
-      name: 'Shampoo y acondicionador', 
-      price: '$30',
-      Image: require('../imagenes/sh&aco.jpg'),
-      description: 'Un corte de cabello clásico y moderno para hombres, realizado por barberos expertos utilizando técnicas de corte precisas y herramientas de alta calidad. El servicio incluye un lavado de cabello, corte personalizado según las preferencias del cliente, y un peinado final para lograr un look impecable y a la moda.'
-    },
-      
-
-    { id: 5, 
-      name: 'Masaje capilar', 
-      price: '$20',
-      Image: require('../imagenes/masaje_capilar.jpg'),
-      description: 'Un corte de cabello clásico y moderno para hombres, realizado por barberos expertos utilizando técnicas de corte precisas y herramientas de alta calidad. El servicio incluye un lavado de cabello, corte personalizado según las preferencias del cliente, y un peinado final para lograr un look impecable y a la moda.'
-    },
-  // puedes dejar los demás igual
-];
-
-const ProductCard = React.memo(({ item, isExpanded, onPress }) => {
-  const animation = new Animated.Value(isExpanded ? 1 : 0);
-
-  React.useEffect(() => {
-    Animated.spring(animation, {
-      toValue: isExpanded ? 1 : 0,
-      friction: 7,
-      tension: 70,
-      useNativeDriver: true,
-    }).start();
-  }, [isExpanded]);
-
-  const rotateArrow = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
-
-  const animatedContentStyle = {
-    opacity: animation,
-    transform: [
-      {
-        translateY: animation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-10, 0],
-        }),
-      },
-    ],
-  };
-
-  return (
-    <View style={styles.card}>
-      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{item.name}</Text>
-            <Text style={styles.price}>{item.price}</Text>
-          </View>
-
-          <View style={{ alignItems: 'center' }}>
-            <Image source={item.Image} style={styles.image} />
-            <Animated.Text
-              style={{ transform: [{ rotate: rotateArrow }], marginTop: 6 }}
-            >
-              ▼
-            </Animated.Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {isExpanded && (
-        <Animated.View style={[styles.expanded, animatedContentStyle]}>
-          <Text style={styles.description}>{item.description}</Text>
-
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>Comprar</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-    </View>
-  );
-});
+import React, { useEffect, useState } from 'react';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+import { launchImageLibrary } from 'react-native-image-picker';
+import {View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,Image} from 'react-native';
 
 export default function SettingsScreen() {
-  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const renderItem = useCallback(
-    ({ item }) => (
-      <ProductCard
-        item={item}
-        isExpanded={selectedId === item.id}
-        onPress={() =>
-          setSelectedId(selectedId === item.id ? null : item.id)
-        }
-      />
-    ),
-    [selectedId]
-  );
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+
+  const user = auth().currentUser;
+  if (!user) return null;
+  const [photoURL, setPhotoURL] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  
+
+  // 🔥 Cargar datos
+  useEffect(() => {
+  const loadUserData = async () => {
+    try {
+      const doc = await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+      if (doc.exists) {
+        const data = doc.data();
+
+        setName(data.name || '');
+        setPhone(data.phone || '');
+        setEmail(data.email || user.email);
+        setPhotoURL(data.photoURL || null); // ✅ AQUÍ sí
+      } else {
+        setEmail(user.email);
+      }
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadUserData();
+}, []);
+
+  // 🔁 Subir imagen
+  const pickImage = async () => {
+    if (!result.assets || result.assets.length === 0) return;
+  const result = await launchImageLibrary({
+    mediaType: 'photo',
+    quality: 0.7,
+  });
+
+  if (result.didCancel) return;
+
+  const uri = result.assets[0].uri;
+
+  uploadImage(uri);
+};
+
+const uploadImage = async (uri) => {
+  try {
+    setUploading(true);
+
+    const user = auth().currentUser;
+    const filename = `profile_${user.uid}.jpg`;
+
+    const reference = storage().ref(`profileImages/${filename}`);
+
+    await reference.putFile(uri);
+
+    const url = await reference.getDownloadURL();
+
+    // 💾 guardar en Firestore
+    await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .set({ photoURL: url }, { merge: true });
+
+    setPhotoURL(url);
+
+    Alert.alert('Foto actualizada 📸');
+  } catch (error) {
+    console.log(error);
+    Alert.alert('Error al subir imagen');
+  } finally {
+    setUploading(false);
+  }
+};
+
+  // 💾 Guardar perfil
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('El nombre es obligatorio');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .set(
+          {
+            name,
+            phone,
+            email,
+          },
+          { merge: true }
+        );
+
+      Alert.alert('Perfil actualizado 💈');
+    } catch (error) {
+      Alert.alert('Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 🔓 Logout
+  const handleLogout = () => {
+    Alert.alert('Cerrar sesión', '¿Seguro?', [
+      { text: 'Cancelar' },
+      {
+        text: 'Salir',
+        onPress: async () => {
+          await auth().signOut();
+        },
+      },
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <FlatList
-        data={productos}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        initialNumToRender={5}
-        maxToRenderPerBatch={5}
-        windowSize={7}
-        removeClippedSubviews
+    
+    <View style={styles.container}>
+      <Text style={styles.title}>Mi Perfil 💈</Text>
+
+    <View style={styles.avatarContainer}>
+      <TouchableOpacity onPress={pickImage}>
+        {photoURL ? (
+          <Image source={{ uri: photoURL }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>
+              {name ? name.charAt(0).toUpperCase() : 'U'}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      {uploading && <Text style={{ marginTop: 10 }}>Subiendo...</Text>}
+    </View>
+      
+      <Text style={styles.label}>Nombre</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="Tu nombre"
       />
-    </SafeAreaView>
+
+      <Text style={styles.label}>Teléfono</Text>
+      <TextInput
+        style={styles.input}
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="+549..."
+      />
+
+      <Text style={styles.label}>Correo</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: '#ddd' }]}
+        value={email}
+        editable={false}
+      />
+
+      <TouchableOpacity style={styles.button} onPress={handleSave}>
+        <Text style={styles.buttonText}>
+          {saving ? 'Guardando...' : 'Guardar'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleLogout}>
+        <Text style={styles.logout}>Cerrar sesión</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 12,
-    padding: 18,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  avatarContainer: {
+  alignItems: 'center',
+  marginBottom: 20,
+},
+
+avatar: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+},
+
+avatarPlaceholder: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+  backgroundColor: '#c59d5f',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+avatarText: {
+  fontSize: 40,
+  color: '#fff',
+  fontWeight: 'bold',
+},
+  container: {
+    flex: 1,
+    padding: 20,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontSize: 22,
+    marginBottom: 20,
+    fontWeight: 'bold',
   },
-  price: {
-    fontSize: 15,
-    color: '#777',
-    marginTop: 4,
+  label: {
+    marginTop: 10,
+    marginBottom: 5,
   },
-  image: {
-    width: 90,
-    height: 90,
-    borderRadius: 16,
-  },
-  expanded: {
-    marginTop: 15,
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#444',
-    marginBottom: 15,
+  input: {
+    backgroundColor: '#eee',
+    padding: 15,
+    borderRadius: 10,
   },
   button: {
-    backgroundColor: '#111',
-    paddingVertical: 14,
-    borderRadius: 14,
+    marginTop: 20,
+    backgroundColor: '#c59d5f',
+    padding: 15,
+    borderRadius: 10,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
+  logout: {
+    marginTop: 30,
+    color: 'red',
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  center: {
+    flex:1,
+    justifyContent:'center',
+    alignItems:'center'
+  }
 });

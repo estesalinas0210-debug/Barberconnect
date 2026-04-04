@@ -1,12 +1,14 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import RootNavigator from './src/navigation/RootNavigatior';
-import BokingScreen from './src/screens/BookingScreen';
+import { UserProvider } from './src/context/UserContext';
 export default function App() {
   return (
-    <NavigationContainer>
-      <RootNavigator />
-    </NavigationContainer>
+    <UserProvider>
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>
+    </UserProvider>
   );
 }
 
