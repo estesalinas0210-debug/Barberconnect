@@ -1,64 +1,82 @@
 import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator } from 'react-native';
-import MyTab from '../navigation/TabNavigations';
+
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+
 import MainLoginScreen from '../screens/MainLoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
-import BarberHomeScreen from '../screens/BarberHomeScreen';
-import ClientHomeScreen from '../screens/ClientHomeScreen';
+import TabNavigations from '../navigation/TabNavigations';
+import BarberTabNavigator from '../screens/BarberTabNavigator';
+
+import { View, ActivityIndicator } from 'react-native';
 
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-  const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
+  const [loadingRole, setLoadingRole] = useState(true);
 
   useEffect(() => {
-    const subscriber = auth().onAuthStateChanged(async (user) => {
-      setUser(user);
+    const unsubscribe = auth().onAuthStateChanged(async (user) => {
+      console.log("USER:", user);
 
-      if (user) {
-        try {
-          const doc = await firestore()
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-          if (doc.exists) {
-            setRole(doc.data().role);
-          } else {
-            setRole('client'); // fallback
-          }
-        } catch (error) {
-          console.log(error);
-          setRole('client');
-        }
-      } else {
-        setRole(null);
+      if (!user) {
+        return LOGIN;
       }
 
-      setInitializing(false);
+      if (user && role === 'barber') {
+        return BARBER;
+      }
+      if (!user) {
+        // 🔥 usuario NO logueado
+        setUser(null);
+        setRole(null);
+        setLoadingRole(false);
+        return;
+      }
+
+      // 🔥 usuario logueado
+      setUser(user);
+
+      try {
+        const doc = await firestore()
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+        console.log("DOC:", doc.exists);
+
+        if (doc.exists) {
+          setRole(doc.data().role);
+        } else {
+          console.log("No existe doc → client");
+          setRole('client');
+        }
+      } catch (error) {
+        console.log("Firestore error:", error);
+        setRole('client');
+      }
+
+      setLoadingRole(false); // 🔥 SIEMPRE
     });
 
-    return subscriber;
+    return unsubscribe;
   }, []);
 
-  // 🔄 pantalla de carga (evita pantallas en blanco)
-  if (initializing) {
-  return (
-    <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
-      <ActivityIndicator size="large" />
-    </View>
-  );
-}
+  // 🔥 LOADING BONITO (NO PANTALLA VACÍA)
+  if (loadingRole) {
+    return (
+      <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      
-      {/* 🔓 NO LOGUEADO */}
+
       {!user && (
         <>
           <Stack.Screen name="MainLoginScreen" component={MainLoginScreen} />
@@ -66,16 +84,15 @@ export default function RootNavigator() {
         </>
       )}
 
-      {/* 👤 CLIENTE */}
       {user && role === 'client' && (
-        <Stack.Screen name="ClientTabs" component={MyTab} />
+        <Stack.Screen name="ClientTabs" component={TabNavigations} />
       )}
 
-      {/* 💈 BARBERO */}
       {user && role === 'barber' && (
-        <Stack.Screen name="BarberHome" component={BarberHomeScreen} />
+        <Stack.Screen name="BarberTabs" component={BarberTabNavigator} />
       )}
 
     </Stack.Navigator>
   );
 }
+console.log("USER ACTUAL:", user);

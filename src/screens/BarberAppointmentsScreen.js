@@ -9,57 +9,58 @@ import {
   FlatList,
 } from 'react-native';
 
-export default function BarberHomeScreen() {
+export default function BarberAppointmentsScreen() {
   const [appointments, setAppointments] = useState([]);
-
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection('appointments')
-      .where('date', '==', today)
-      //.orderBy('time')
-      .onSnapshot((snapshot) => {
-  if (!snapshot) return;
+  const unsubscribe = firestore()
+    .collection('appointments')
+    .where('date', '==', today)
+    .onSnapshot(
+      (snapshot) => {
+        if (!snapshot) {
+          setAppointments([]);
+          return;
+        }
 
-  const list = [];
+        const list = [];
 
-  snapshot.forEach((doc) => {
-    list.push({ id: doc.id, ...doc.data() });
-  });
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data) {
+            list.push({ id: doc.id, ...data });
+          }
+        });
 
-  setAppointments(list);
-});
+        setAppointments(list);
+      },
+      (error) => {
+        console.log('Firestore error:', error);
+        setAppointments([]);
+      }
+    );
 
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, []);
 
-  // ✅ Confirmar turno
   const confirmAppointment = async (id) => {
-    await firestore()
-      .collection('appointments')
-      .doc(id)
-      .update({ status: 'confirmed' });
-
+    await firestore().collection('appointments').doc(id).update({
+      status: 'confirmed',
+    });
     Alert.alert('Turno confirmado 💈');
   };
 
-  // ❌ Cancelar turno
   const cancelAppointment = async (id) => {
-    await firestore()
-      .collection('appointments')
-      .doc(id)
-      .delete();
-
+    await firestore().collection('appointments').doc(id).delete();
     Alert.alert('Turno cancelado ❌');
   };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <Text style={styles.time}>🕒 {item.time}</Text>
-      <Text>Cliente ID: {item.userId}</Text>
+      <Text>Cliente: {item.userName || 'Sin nombre'}</Text>
       <Text>Estado: {item.status}</Text>
-      <Text>Cliente: {item.userName}</Text>
 
       {item.status === 'pending' && (
         <TouchableOpacity
@@ -81,7 +82,7 @@ export default function BarberHomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Panel del Barbero 💈</Text>
+      <Text style={styles.title}>Turnos de Hoy 💈</Text>
 
       <FlatList
         data={appointments}
@@ -95,7 +96,7 @@ export default function BarberHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  title: { fontSize: 22, marginBottom: 20, marginTop: 10, fontWeight: 'bold' },
+  title: { fontSize: 22, marginBottom: 20, fontWeight: 'bold' },
 
   card: {
     backgroundColor: '#eee',
@@ -104,10 +105,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
 
-  time: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  time: { fontSize: 16, fontWeight: 'bold' },
 
   confirm: {
     marginTop: 10,
@@ -123,8 +121,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 
-  btnText: {
-    color: '#fff',
-    textAlign: 'center',
-  },
+  btnText: { color: '#fff', textAlign: 'center' },
 });

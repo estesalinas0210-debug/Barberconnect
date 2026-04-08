@@ -32,7 +32,7 @@ export default function MainLoginScreen({ navigation }) {
           const role = doc.exists ? doc.data().role : 'client';
 
           if (role === 'barber') {
-            navigation.replace('BarberHome');
+            navigation.replace('BarberTabs');
           } else {
             navigation.replace('ClientHome');
           }
@@ -86,7 +86,7 @@ export default function MainLoginScreen({ navigation }) {
 
       // 🚀 Redirección inteligente
       if (role === 'barber') {
-        navigation.replace('BarberHome');
+        navigation.replace('BarberTabs');
       } else {
         navigation.replace('ClientHome');
       }

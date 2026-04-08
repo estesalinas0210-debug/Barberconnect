@@ -3,95 +3,114 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import { launchImageLibrary } from 'react-native-image-picker';
-import {View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,Image} from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Image,
+} from 'react-native';
 
 export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [photoURL, setPhotoURL] = useState(null);
 
   const user = auth().currentUser;
-  if (!user) return null;
-  const [photoURL, setPhotoURL] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  
+
+  // 🔒 Evita crash si user aún no está listo
+  if (!user) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   // 🔥 Cargar datos
   useEffect(() => {
-  const loadUserData = async () => {
-    try {
-      const doc = await firestore()
-        .collection('users')
-        .doc(user.uid)
-        .get();
+    const loadUserData = async () => {
+      try {
+        const doc = await firestore()
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-      if (doc.exists) {
-        const data = doc.data();
+        if (doc.exists) {
+          const data = doc.data();
 
-        setName(data.name || '');
-        setPhone(data.phone || '');
-        setEmail(data.email || user.email);
-        setPhotoURL(data.photoURL || null); // ✅ AQUÍ sí
-      } else {
-        setEmail(user.email);
+          setName(data.name || '');
+          setPhone(data.phone || '');
+          setEmail(data.email || user.email);
+          setPhotoURL(data.photoURL || null);
+        } else {
+          setEmail(user.email);
+        }
+      } catch (error) {
+        console.log(error);
+      } finally {
+        setLoading(false);
       }
+    };
+
+    loadUserData();
+  }, [user]);
+
+  // 📸 Seleccionar imagen
+  const pickImage = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.7,
+      });
+
+      if (result.didCancel) return;
+
+      if (!result.assets || result.assets.length === 0) return;
+
+      const uri = result.assets[0].uri;
+
+      uploadImage(uri);
     } catch (error) {
       console.log(error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  loadUserData();
-}, []);
+  // ☁️ Subir imagen
+  const uploadImage = async (uri) => {
+    try {
+      setUploading(true);
 
-  // 🔁 Subir imagen
-  const pickImage = async () => {
-    if (!result.assets || result.assets.length === 0) return;
-  const result = await launchImageLibrary({
-    mediaType: 'photo',
-    quality: 0.7,
-  });
+      const filename = `profile_${user.uid}.jpg`;
+      const reference = storage().ref(`profileImages/${filename}`);
 
-  if (result.didCancel) return;
+      await reference.putFile(uri);
 
-  const uri = result.assets[0].uri;
+      const url = await reference.getDownloadURL();
 
-  uploadImage(uri);
-};
+      await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .set({ photoURL: url }, { merge: true });
 
-const uploadImage = async (uri) => {
-  try {
-    setUploading(true);
+      setPhotoURL(url);
 
-    const user = auth().currentUser;
-    const filename = `profile_${user.uid}.jpg`;
-
-    const reference = storage().ref(`profileImages/${filename}`);
-
-    await reference.putFile(uri);
-
-    const url = await reference.getDownloadURL();
-
-    // 💾 guardar en Firestore
-    await firestore()
-      .collection('users')
-      .doc(user.uid)
-      .set({ photoURL: url }, { merge: true });
-
-    setPhotoURL(url);
-
-    Alert.alert('Foto actualizada 📸');
-  } catch (error) {
-    console.log(error);
-    Alert.alert('Error al subir imagen');
-  } finally {
-    setUploading(false);
-  }
-};
+      Alert.alert('Foto actualizada 📸');
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error al subir imagen');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // 💾 Guardar perfil
   const handleSave = async () => {
@@ -124,16 +143,12 @@ const uploadImage = async (uri) => {
   };
 
   // 🔓 Logout
-  const handleLogout = () => {
-    Alert.alert('Cerrar sesión', '¿Seguro?', [
-      { text: 'Cancelar' },
-      {
-        text: 'Salir',
-        onPress: async () => {
-          await auth().signOut();
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+    } catch (error) {
+      Alert.alert('Error al cerrar sesión');
+    }
   };
 
   if (loading) {
@@ -145,25 +160,25 @@ const uploadImage = async (uri) => {
   }
 
   return (
-    
     <View style={styles.container}>
       <Text style={styles.title}>Mi Perfil 💈</Text>
 
-    <View style={styles.avatarContainer}>
-      <TouchableOpacity onPress={pickImage}>
-        {photoURL ? (
-          <Image source={{ uri: photoURL }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>
-              {name ? name.charAt(0).toUpperCase() : 'U'}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-      {uploading && <Text style={{ marginTop: 10 }}>Subiendo...</Text>}
-    </View>
-      
+      <View style={styles.avatarContainer}>
+        <TouchableOpacity onPress={pickImage}>
+          {photoURL ? (
+            <Image source={{ uri: photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {name ? name.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {uploading && <Text style={{ marginTop: 10 }}>Subiendo...</Text>}
+      </View>
+
       <Text style={styles.label}>Nombre</Text>
       <TextInput
         style={styles.input}
