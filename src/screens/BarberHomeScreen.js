@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import auth from '@react-native-firebase/auth';
+import React, { useEffect, useState } from 'react';
 import firestore from '@react-native-firebase/firestore';
 import {
   View,
@@ -7,135 +6,123 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  FlatList,
 } from 'react-native';
 
-export default function ClientHomeScreen() {
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [bookedTimes, setBookedTimes] = useState([]);
+export default function BarberHomeScreen() {
+  const [appointments, setAppointments] = useState([]);
 
-  const date = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
 
-  const times = [
-    '09:00',
-    '10:00',
-    '11:00',
-    '12:00',
-    '15:00',
-    '16:00',
-    '17:00',
-  ];
-
-  // 🔥 Cargar horarios ocupados
   useEffect(() => {
     const unsubscribe = firestore()
       .collection('appointments')
-      .where('date', '==', date)
-      .onSnapshot((querySnapshot) => {
-        const booked = [];
-        querySnapshot.forEach((doc) => {
-          booked.push(doc.data().time);
+      .where('date', '==', today)
+      .orderBy('time')
+      .onSnapshot((snapshot) => {
+        const list = [];
+
+        snapshot.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
         });
-        setBookedTimes(booked);
+
+        setAppointments(list);
       });
 
     return () => unsubscribe();
   }, []);
 
-  // 📅 Reservar turno
-  const bookAppointment = async () => {
-    try {
-      if (!selectedTime) {
-        Alert.alert('Selecciona un horario');
-        return;
-      }
+  // ✅ Confirmar turno
+  const confirmAppointment = async (id) => {
+    await firestore()
+      .collection('appointments')
+      .doc(id)
+      .update({ status: 'confirmed' });
 
-      const user = auth().currentUser;
-
-      await firestore().collection('appointments').add({
-        userId: user.uid,
-        date,
-        time: selectedTime,
-        status: 'pending',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      });
-
-      Alert.alert('Turno reservado 💈');
-      setSelectedTime(null);
-    } catch (error) {
-      console.log(error);
-      Alert.alert('Error al reservar');
-    }
+    Alert.alert('Turno confirmado 💈');
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Selecciona un horario</Text>
+  // ❌ Cancelar turno
+  const cancelAppointment = async (id) => {
+    await firestore()
+      .collection('appointments')
+      .doc(id)
+      .delete();
 
-      {times.map((time) => {
-        const isBooked = bookedTimes.includes(time);
+    Alert.alert('Turno cancelado ❌');
+  };
 
-        return (
-          <TouchableOpacity
-            key={time}
-            style={[
-              styles.timeButton,
-              isBooked && styles.booked,
-              selectedTime === time && styles.selected,
-            ]}
-            disabled={isBooked}
-            onPress={() => setSelectedTime(time)}
-          >
-            <Text style={styles.text}>
-              {time} {isBooked ? '❌' : ''}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.time}>🕒 {item.time}</Text>
+      <Text>Cliente ID: {item.userId}</Text>
+      <Text>Estado: {item.status}</Text>
+      <Text>Cliente: {item.userName}</Text>
 
-      <TouchableOpacity style={styles.button} onPress={bookAppointment}>
-        <Text style={styles.buttonText}>Reservar turno</Text>
+      {item.status === 'pending' && (
+        <TouchableOpacity
+          style={styles.confirm}
+          onPress={() => confirmAppointment(item.id)}
+        >
+          <Text style={styles.btnText}>Confirmar</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        style={styles.cancel}
+        onPress={() => cancelAppointment(item.id)}
+      >
+        <Text style={styles.btnText}>Cancelar</Text>
       </TouchableOpacity>
     </View>
   );
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Panel del Barbero 💈</Text>
+
+      <FlatList
+        data={appointments}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListEmptyComponent={<Text>No hay turnos hoy</Text>}
+      />
+    </View>
+  );
 }
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  title: {
-    fontSize: 20,
-    marginBottom: 20,
-  },
-  timeButton: {
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 22, marginBottom: 20, fontWeight: 'bold' },
+
+  card: {
+    backgroundColor: '#eee',
     padding: 15,
-    backgroundColor: '#ddd',
     marginBottom: 10,
     borderRadius: 10,
   },
-  selected: {
-    backgroundColor: '#c59d5f',
+
+  time: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  booked: {
-    backgroundColor: '#999',
+
+  confirm: {
+    marginTop: 10,
+    backgroundColor: 'green',
+    padding: 10,
+    borderRadius: 8,
   },
-  button: {
-    marginTop: 20,
-    backgroundColor: '#111',
-    padding: 15,
-    borderRadius: 10,
+
+  cancel: {
+    marginTop: 10,
+    backgroundColor: 'red',
+    padding: 10,
+    borderRadius: 8,
   },
-  buttonText: {
+
+  btnText: {
     color: '#fff',
     textAlign: 'center',
-  },
-  text: {
-    textAlign: 'center',
-  },
-  card: {
-    padding: 15,
-    backgroundColor: '#eee',
-    marginBottom: 10,
-    borderRadius: 10,
   },
 });
