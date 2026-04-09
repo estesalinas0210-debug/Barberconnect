@@ -22,10 +22,6 @@ export default function RootNavigator() {
     const unsubscribe = auth().onAuthStateChanged(async (user) => {
       console.log("USER:", user);
 
-      if (!user) {
-        return LOGIN;
-      }
-
       if (user && role === 'barber') {
         return BARBER;
       }
@@ -75,24 +71,23 @@ export default function RootNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
 
-      {!user && (
-        <>
-          <Stack.Screen name="MainLoginScreen" component={MainLoginScreen} />
-          <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-        </>
-      )}
+    {!user && (
+      <>
+        <Stack.Screen name="MainLoginScreen" component={MainLoginScreen} />
+        <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+      </>
+    )}
 
-      {user && role === 'client' && (
-        <Stack.Screen name="ClientTabs" component={TabNavigations} />
-      )}
+    {user && role === 'client' && (
+      <Stack.Screen name="ClientTabs" component={TabNavigations} />
+    )}
 
-      {user && role === 'barber' && (
-        <Stack.Screen name="BarberTabs" component={BarberTabNavigator} />
-      )}
+    {user && role === 'barber' && (
+      <Stack.Screen name="BarberTabs" component={BarberTabNavigator} />
+    )}
 
-    </Stack.Navigator>
-  );
+  </Stack.Navigator>
+);
 }
-console.log("USER ACTUAL:", user);

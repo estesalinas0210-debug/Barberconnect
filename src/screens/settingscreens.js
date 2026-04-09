@@ -207,7 +207,6 @@ export default function SettingsScreen() {
           {saving ? 'Guardando...' : 'Guardar'}
         </Text>
       </TouchableOpacity>
-
       <TouchableOpacity onPress={handleLogout}>
         <Text style={styles.logout}>Cerrar sesión</Text>
       </TouchableOpacity>
